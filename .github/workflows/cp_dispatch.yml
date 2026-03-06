@@ -17,7 +17,7 @@ on:
       patch-server-port:
         description: 'Patch server port (Default 5678)'
         required: true
-        default: '5678'
+        default: "5688"
 
 defaults:
   run:
