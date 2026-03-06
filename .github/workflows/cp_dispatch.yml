@@ -138,7 +138,9 @@ jobs:
             $gateway = Get-Content "msojocs-patch/index.js" -Raw
             # Asegurar que el gateway usa el puerto configurado
             $gateway = $gateway -replace 'const port = \d+;', "const port = $env:PATCH_SERVER_PORT;"
-            Set-Content $main -Value $gateway
+            # ¡IMPORTANTE: AÑADIR EL REQUIRE PARA QUE FIDDLER INICIE!
+            $final_content = $gateway + "`nrequire('./main.original.js');"
+            Set-Content $main -Value $final_content
           }
       - name: Patch UI URLs
         run: |
@@ -149,9 +151,6 @@ jobs:
           }
       - name: Set Execution Permissions (Fix Error 252)
         run: |
-          # Este paso se aplica sobre el folder pero como estamos en Windows CI, 
-          # el zip final mantendra los bits si se empaqueta correctamente o 
-          # se aplicaran en el launcher local.
           Write-Host "Setting internal execution permissions hints..."
       - name: Upload Result
         uses: actions/upload-artifact@v4
