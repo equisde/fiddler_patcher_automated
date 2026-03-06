@@ -136,22 +136,17 @@ jobs:
           if (Test-Path $main) {
             Copy-Item $main $original
             $gateway = Get-Content "msojocs-patch/index.js" -Raw
-            # Asegurar que el gateway usa el puerto configurado
             $gateway = $gateway -replace 'const port = \d+;', "const port = $env:PATCH_SERVER_PORT;"
-            # ¡IMPORTANTE: AÑADIR EL REQUIRE PARA QUE FIDDLER INICIE!
-            $final_content = $gateway + "`nrequire('./main.original.js');"
-            Set-Content $main -Value $final_content
+            Set-Content $main -Value $gateway
           }
-      - name: Patch UI URLs
+      - name: Patch UI URLs (Forcing HTTP to avoid SSL errors)
         run: |
           if (Test-Path "fe_app/resources/app/out/WebServer/ClientApp/dist") {
             Get-ChildItem -Path "fe_app/resources/app/out/WebServer/ClientApp/dist" -Filter main*.js -Recurse | ForEach-Object {
+              # REEMPLAZAR HTTPS POR HTTP HACIA EL GATEWAY LOCAL
               (Get-Content $_.FullName) -replace 'https://api.getfiddler.com', "http://127.0.0.1:$env:PATCH_SERVER_PORT/api.getfiddler.com" -replace 'https://identity.getfiddler.com', "http://127.0.0.1:$env:PATCH_SERVER_PORT/identity.getfiddler.com" | Set-Content $_.FullName
             }
           }
-      - name: Set Execution Permissions (Fix Error 252)
-        run: |
-          Write-Host "Setting internal execution permissions hints..."
       - name: Upload Result
         uses: actions/upload-artifact@v4
         with:
