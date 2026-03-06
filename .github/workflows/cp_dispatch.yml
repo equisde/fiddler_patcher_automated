@@ -6,7 +6,7 @@ on:
       version_to_patch:
         description: 'The Version You Want to Patch'
         required: true
-        default: '7.0.0'
+        default: '7.6.0'
       os-and-arch:
         description: 'Operating System And Architecture'
         required: true
@@ -63,18 +63,19 @@ jobs:
     needs: [validate-version, init_os_arch]
     if: needs.validate-version.outputs.is_valid == 'true'
     outputs:
-      Yui-fiddler-name: ${{ steps.Yui-fiddler-name.outputs.Yui-fiddler-name }}
+      Yui_fiddler_name: ${{ steps.yui_info.outputs.yui_fiddler_name }}
     steps:
       - name: Set Names
-        id: Yui-fiddler-name
+        id: yui_info
         run: |
           $name = ($env:OS_ARCH -match 'Windows') ? 'fiddler.dll' : 'libfiddler.so'
-          echo "Yui-fiddler-name=$name" >> $env:GITHUB_OUTPUT
+          "yui_fiddler_name=$name" | Out-File -Append -FilePath $env:GITHUB_OUTPUT
       - name: Download Yui
         run: |
           mkdir Yui
-          $url = "https://github.com/project-yui/Yui-patch/releases/download/continuous/yui-$(($env:OS_ARCH -match 'Windows') ? 'fiddler' : 'libfiddler')-${{ needs.init_os_arch.outputs.arch_code }}-continuous.$(($env:OS_ARCH -match 'Windows') ? 'dll' : 'so')"
-          Invoke-WebRequest -Uri $url -OutFile "Yui/$($steps.Yui-fiddler-name.outputs.Yui-fiddler-name)"
+          $lib_name = ($env:OS_ARCH -match 'Windows') ? 'fiddler' : 'libfiddler'
+          $url = "https://github.com/project-yui/Yui-patch/releases/download/continuous/yui-$($lib_name)-${{ needs.init_os_arch.outputs.arch_code }}-continuous.$(($env:OS_ARCH -match 'Windows') ? 'dll' : 'so')"
+          Invoke-WebRequest -Uri $url -OutFile "Yui/$($steps.yui_info.outputs.yui_fiddler_name)"
       - name: Upload Yui
         uses: actions/upload-artifact@v4
         with:
@@ -95,6 +96,7 @@ jobs:
 
   download-fiddler:
     runs-on: ubuntu-latest
+    needs: [validate-version]
     steps:
       - name: Download & Extract FE
         run: |
@@ -107,9 +109,10 @@ jobs:
           } else {
             $url = "https://downloads.getfiddler.com/linux/fiddler-everywhere-$v.AppImage"
             Invoke-WebRequest -Uri $url -OutFile "setup.AppImage"
-            # Note: AppImage extraction in CI might need options
-            # Simplified for this example
-            mkdir fe_app
+            # Linux extraction
+            chmod +x ./setup.AppImage
+            ./setup.AppImage --appimage-extract
+            mv squashfs-root fe_app
           }
       - name: Upload App
         uses: actions/upload-artifact@v4
@@ -125,20 +128,23 @@ jobs:
         uses: actions/download-artifact@v4
       - name: Apply Yui DLL
         run: |
-          $target = "fe_app/$((Get-ChildItem Yui-patch).Name)"
           Copy-Item -Path "Yui-patch/*" -Destination "fe_app/" -Force
       - name: Inyect Cloud Gateway
         run: |
           $main = "fe_app/resources/app/out/main.js"
           $original = "fe_app/resources/app/out/main.original.js"
-          Copy-Item $main $original
-          $gateway = Get-Content "msojocs-patch/index.js" -Raw
-          $gateway = $gateway -replace 'const port = \d+;', "const port = $env:PATCH_SERVER_PORT;"
-          Set-Content $main -Value ($gateway + "`n" + "require('./main.original.js');")
+          if (Test-Path $main) {
+            Copy-Item $main $original
+            $gateway = Get-Content "msojocs-patch/index.js" -Raw
+            $gateway = $gateway -replace 'const port = \d+;', "const port = $env:PATCH_SERVER_PORT;"
+            Set-Content $main -Value ($gateway + "`n" + "require('./main.original.js');")
+          }
       - name: Patch UI URLs
         run: |
-          Get-ChildItem -Path "fe_app/resources/app/out/WebServer/ClientApp/dist" -Filter main*.js -Recurse | ForEach-Object {
-            (Get-Content $_.FullName) -replace 'https://api.getfiddler.com', "http://127.0.0.1:$env:PATCH_SERVER_PORT/api.getfiddler.com" -replace 'https://identity.getfiddler.com', "http://127.0.0.1:$env:PATCH_SERVER_PORT/identity.getfiddler.com" | Set-Content $_.FullName
+          if (Test-Path "fe_app/resources/app/out/WebServer/ClientApp/dist") {
+            Get-ChildItem -Path "fe_app/resources/app/out/WebServer/ClientApp/dist" -Filter main*.js -Recurse | ForEach-Object {
+              (Get-Content $_.FullName) -replace 'https://api.getfiddler.com', "http://127.0.0.1:$env:PATCH_SERVER_PORT/api.getfiddler.com" -replace 'https://identity.getfiddler.com', "http://127.0.0.1:$env:PATCH_SERVER_PORT/identity.getfiddler.com" | Set-Content $_.FullName
+            }
           }
       - name: Upload Result
         uses: actions/upload-artifact@v4
