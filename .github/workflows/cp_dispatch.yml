@@ -15,9 +15,9 @@ on:
           - Windows (x86_64)
           - Linux (x86_64)
       patch-server-port:
-        description: 'Patch server port (Default 5688)'
+        description: 'Patch server port (Standard 5678)'
         required: true
-        default: '5688'
+        default: '5678'
 
 defaults:
   run:
@@ -139,11 +139,11 @@ jobs:
             $gateway = $gateway -replace 'const port = \d+;', "const port = $env:PATCH_SERVER_PORT;"
             Set-Content $main -Value $gateway
           }
-      - name: Patch UI URLs (Forcing HTTP to avoid SSL errors)
+      - name: Patch UI URLs (BYPASS SSL)
         run: |
           if (Test-Path "fe_app/resources/app/out/WebServer/ClientApp/dist") {
             Get-ChildItem -Path "fe_app/resources/app/out/WebServer/ClientApp/dist" -Filter main*.js -Recurse | ForEach-Object {
-              # REEMPLAZAR HTTPS POR HTTP HACIA EL GATEWAY LOCAL
+              # FORZAR HTTP HACIA LOCALHOST PARA EVITAR ERRORES SSL
               (Get-Content $_.FullName) -replace 'https://api.getfiddler.com', "http://127.0.0.1:$env:PATCH_SERVER_PORT/api.getfiddler.com" -replace 'https://identity.getfiddler.com', "http://127.0.0.1:$env:PATCH_SERVER_PORT/identity.getfiddler.com" | Set-Content $_.FullName
             }
           }
